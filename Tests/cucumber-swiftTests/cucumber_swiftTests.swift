@@ -94,24 +94,24 @@ struct GivenCucumber : Step {
     
     @Cuke var cucumber
     
-    var match : Match<(Substring, Substring)> {
-        Match(#/a/an (unimplemented|pending|flawed|implemented) cucumber/#) {_, cukeState in
+    var match : some Matcher {
+        Cucumber.match(#/a/an (unimplemented|pending|flawed|implemented) cucumber/#) {cukeState in
             switch CukeState(rawValue: String(cukeState))! {
             case .unimplemented:
                 ()
             case .pending:
                 struct MatchAllPending : Step {
-                    let match = Match(#/(.*)/#) {_ in throw CucumberError.pending}
+                    var match : some Matcher { Cucumber.match(#/(.*)/#) {_ in throw CucumberError.pending} }
                 }
                 cucumber.register(MatchAllPending())
             case .implemented:
                 struct MatchAllSucceed : Step {
-                    let match = Match(#/(.*)/#) {_ in }
+                    var match : some Matcher { Cucumber.match(#/(.*)/#) {_ in } }
                 }
                 cucumber.register(MatchAllSucceed())
             case .flawed:
                 struct MatchAllFail : Step {
-                    let match = Match(#/(.*)/#) {_ in throw SomeError()}
+                    var match : some Matcher { Cucumber.match(#/(.*)/#) {_ in throw SomeError()} }
                 }
                 cucumber.register(MatchAllFail())
             }
@@ -131,8 +131,8 @@ struct CukeExpectation : Step {
     
     @TestResult var result
     
-    var match : Match<(Substring, Substring)> {
-        Match(#/it should (print snippets|be pending|fail|work)/#) {_, arg in
+    var match : some Matcher {
+        Cucumber.match(#/it should (print snippets|be pending|fail|work)/#) {arg in
             XCTAssertEqual(result, CukeResult(rawValue: String(arg))!)
         }
     }
@@ -143,8 +143,8 @@ struct GivenDocString : Step {
     
     @DocString var docString
     
-    var match : Match<Substring> {
-        Match(#/a docstring:/#) {arg in
+    var match : some Matcher {
+        Cucumber.match(#/a docstring:/#) {
             XCTAssert(!docString.isEmpty)
         }
     }
@@ -158,8 +158,8 @@ struct GivenDataTable : Step {
     
     @Examples var examples : [TestData]
     
-    var match : Match<Substring> {
-        Match(#/a data table:/#) {arg in
+    var match : some Matcher {
+        Cucumber.match(#/a data table:/#) {
             XCTAssert(!examples.isEmpty)
         }
     }
@@ -171,8 +171,8 @@ struct CukeReadsFile : Step {
     @TheFile var url
     @TestResult var result
     
-    var match : Match<(Substring)>  {
-        Match(#/cucumber reads this file/#) {arg in
+    var match : some Matcher {
+        Cucumber.match(#/cucumber reads this file/#) {
             actor Reporter : CukeReporter {
                 var result : CukeResult = .fail
                 func reportScenario(status: ScenarioState, isFinished: Bool) {

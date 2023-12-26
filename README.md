@@ -74,79 +74,101 @@ And I got the following console output:
 
 ```bash
 struct MyStep0 : Step {
-  let match = Match(#/a data table:/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a data table:/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep1 : Step {
-  let match = Match(#/a/an flawed cucumber/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a/an implemented cucumber/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep2 : Step {
-  let match = Match(#/it should print snippets/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/it should work/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep3 : Step {
-  let match = Match(#/a/an implemented cucumber/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/it should print snippets/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep4 : Step {
-  let match = Match(#/it should work/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a/an unimplemented cucumber/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep5 : Step {
-  let match = Match(#/a/an pending cucumber/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a/an flawed cucumber/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep6 : Step {
-  let match = Match(#/a docstring:/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a/an pending cucumber/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep7 : Step {
-  let match = Match(#/it should fail/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/it should fail/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep8 : Step {
-  let match = Match(#/it should be pending/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/cucumber reads this file/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep9 : Step {
-  let match = Match(#/cucumber reads this file/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/it should be pending/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 
 struct MyStep10 : Step {
-  let match = Match(#/a/an unimplemented cucumber/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/a docstring:/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 ```
 

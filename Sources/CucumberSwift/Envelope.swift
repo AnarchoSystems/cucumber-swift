@@ -8,26 +8,29 @@
 import Foundation
 
 public enum MessageType : String, CodingKey, Codable {
-    case pickle, source, gherkinDocument
+    case pickle, source, gherkinDocument, parseError
 }
 
 public enum Envelope : Codable {
     case pickle(Pickle)
     case source(Source)
     case gherkinDocument(GherkinDocument)
+    case parseError(ParseError)
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: MessageType.self)
-        guard container.allKeys.count == 1 else {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                                                    debugDescription: "More than one message type found"))
+        var allKeys = ArraySlice(container.allKeys)
+        guard let onlyKey = allKeys.popFirst(), allKeys.isEmpty else {
+            throw DecodingError.typeMismatch(PickleArg.self, DecodingError.Context.init(codingPath: container.codingPath, debugDescription: "Invalid number of keys found, expected one.", underlyingError: nil))
         }
-        switch container.allKeys.first! {
+        switch onlyKey {
         case .pickle:
             self = try .pickle(container.decode(Pickle.self, forKey: .pickle))
         case .source:
             self = try .source(container.decode(Source.self, forKey: .source))
         case .gherkinDocument:
             self = try .gherkinDocument(container.decode(GherkinDocument.self, forKey: .gherkinDocument))
+        case .parseError:
+            self = try .parseError(container.decode(ParseError.self, forKey: .parseError))
         }
     }
     public func encode(to encoder: Encoder) throws {
@@ -38,6 +41,8 @@ public enum Envelope : Codable {
             try [MessageType.source : source].encode(to: encoder)
         case .gherkinDocument(let gherkinDocument):
             try [MessageType.gherkinDocument : gherkinDocument].encode(to: encoder)
+        case .parseError(let parseError):
+            try [MessageType.parseError : parseError].encode(to: encoder)
         }
     }
 }
@@ -132,4 +137,8 @@ public struct Source : Codable {
 
 public struct GherkinDocument : Codable {
     
+}
+
+public struct ParseError : Codable, Error {
+    let message : String
 }

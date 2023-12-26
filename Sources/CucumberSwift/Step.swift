@@ -6,6 +6,6 @@
 //
 
 public protocol Step {
-    associatedtype Args
-    var match : Match<Args> {get}
+    associatedtype Match : Matcher
+    var match : Match {get}
 }

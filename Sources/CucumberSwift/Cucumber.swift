@@ -57,9 +57,11 @@ public extension CukeReporter {
 """
 
 struct MyStep\(idx) : Step {
-  let match = Match(#/\(undefinedStep)/#) {arg in
-      throw CucumberError.pending
-  }
+    var match : some Matcher {
+        Cucumber.match(#/\(undefinedStep)/#) {
+            throw CucumberError.pending
+        }
+    }
 }
 
 """
@@ -94,7 +96,7 @@ public class Cucumber {
     
     public func run(_ url: URL) async throws {
         for try await envelope in try Gherkin().stream(url) {
-            await handleEnvelope(envelope)
+            try await handleEnvelope(envelope)
         }
         let undefinedSteps = Set(scenarioStates.values.flatMap{$0.steps.lazy.filter{$0.state == .undefined}.map{$0.text}})
         if !undefinedSteps.isEmpty {
@@ -103,7 +105,7 @@ public class Cucumber {
         scenarioStates = [:]
     }
     
-    private func handleEnvelope(_ envelope: Envelope) async {
+    private func handleEnvelope(_ envelope: Envelope) async throws {
         switch envelope {
         case .pickle(let pickle):
             await handlePickle(pickle)
@@ -111,6 +113,8 @@ public class Cucumber {
             ()
         case .gherkinDocument:
             ()
+        case .parseError(let error):
+            throw error
         }
     }
     
@@ -126,14 +130,14 @@ public class Cucumber {
     
     private func tryExecutePickleStep(_ container: any DIContainer, step: PickleStep, scenarioState: inout ScenarioState) async {
         do {
-            let matches = try steps.compactMap{stp in try stp.erasedMatch(step.text).map{match in (stp, match)}}
+            let matches = try steps.compactMap{stp in try stp.match.match(step.text).map{match in (stp, match)}}
             if matches.isEmpty {
                 scenarioState.steps.append(.init(text: step.text,
                                                  state: .undefined))
                 // add to undefined steps
             }
             if matches.count > 1 {
-                throw InternalCucumberError.ambiguousMatch(matches.map{arg in arg.0.regexText})
+                throw InternalCucumberError.ambiguousMatch(matches.map{arg in arg.0.match.regexText})
             }
             guard scenarioState.state == .success else {
                 return
@@ -143,7 +147,7 @@ public class Cucumber {
             if let argument = step.argument {
                 try stp.readArgs(args: argument)
             }
-            try await stp.run(match)
+            try await stp.match.invoke(with: match)
         }
         catch CucumberError.pending {
             scenarioState.steps.append(.init(text: step.text, state: .pending))
@@ -171,14 +175,6 @@ public enum CucumberError : Error {
 }
 
 extension Step {
-    var erasedMatch : (String) throws -> Any? {
-        {str in
-            try match.regex.wholeMatch(in: str)?.output
-        }
-    }
-    var regexText : String {
-        "\(match.regex)"
-    }
     func inject(from container: any DIContainer) throws {
         try container.inject(into: self)
     }
@@ -188,9 +184,6 @@ extension Step {
                 try reader.read(from: args)
             }
         }
-    }
-    func run(_ arg: Any) async throws {
-        try await match.onRecognize(arg as! Args)
     }
 }
 
