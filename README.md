@@ -75,7 +75,7 @@ And I got the following console output:
 ```bash
 struct MyStep0 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a data table:/#) {
+        Given(#/a data table:/#) {
             throw CucumberError.pending
         }
     }
@@ -84,7 +84,7 @@ struct MyStep0 : Step {
 
 struct MyStep1 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a/an implemented cucumber/#) {
+        Given(#/a/an implemented cucumber/#) {
             throw CucumberError.pending
         }
     }
@@ -93,7 +93,7 @@ struct MyStep1 : Step {
 
 struct MyStep2 : Step {
     var match : some Matcher {
-        Cucumber.match(#/it should work/#) {
+        Given(#/it should work/#) {
             throw CucumberError.pending
         }
     }
@@ -102,7 +102,7 @@ struct MyStep2 : Step {
 
 struct MyStep3 : Step {
     var match : some Matcher {
-        Cucumber.match(#/it should print snippets/#) {
+        Given(#/it should print snippets/#) {
             throw CucumberError.pending
         }
     }
@@ -111,7 +111,7 @@ struct MyStep3 : Step {
 
 struct MyStep4 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a/an unimplemented cucumber/#) {
+        Given(#/a/an unimplemented cucumber/#) {
             throw CucumberError.pending
         }
     }
@@ -120,7 +120,7 @@ struct MyStep4 : Step {
 
 struct MyStep5 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a/an flawed cucumber/#) {
+        Given(#/a/an flawed cucumber/#) {
             throw CucumberError.pending
         }
     }
@@ -129,7 +129,7 @@ struct MyStep5 : Step {
 
 struct MyStep6 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a/an pending cucumber/#) {
+        Given(#/a/an pending cucumber/#) {
             throw CucumberError.pending
         }
     }
@@ -138,7 +138,7 @@ struct MyStep6 : Step {
 
 struct MyStep7 : Step {
     var match : some Matcher {
-        Cucumber.match(#/it should fail/#) {
+        Given(#/it should fail/#) {
             throw CucumberError.pending
         }
     }
@@ -147,7 +147,7 @@ struct MyStep7 : Step {
 
 struct MyStep8 : Step {
     var match : some Matcher {
-        Cucumber.match(#/cucumber reads this file/#) {
+        Given(#/cucumber reads this file/#) {
             throw CucumberError.pending
         }
     }
@@ -156,7 +156,7 @@ struct MyStep8 : Step {
 
 struct MyStep9 : Step {
     var match : some Matcher {
-        Cucumber.match(#/it should be pending/#) {
+        Given(#/it should be pending/#) {
             throw CucumberError.pending
         }
     }
@@ -165,7 +165,7 @@ struct MyStep9 : Step {
 
 struct MyStep10 : Step {
     var match : some Matcher {
-        Cucumber.match(#/a docstring:/#) {
+        Given(#/a docstring:/#) {
             throw CucumberError.pending
         }
     }

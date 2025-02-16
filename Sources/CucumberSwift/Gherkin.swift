@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Gherkin {
+public struct Gherkin : Sendable {
     
     public init() {}
     
@@ -19,7 +19,7 @@ public struct Gherkin {
         }
     }
     
-    private func toAsyncStream<T>(_ array: [T]) -> AsyncThrowingStream<T, Error> {
+    private func toAsyncStream<T : Sendable>(_ array: [T]) -> AsyncThrowingStream<T, Error> {
         AsyncThrowingStream {continuation in
             for elem in array {
                 continuation.yield(elem)
@@ -40,6 +40,7 @@ public struct Gherkin {
         return []
     }
     
+    @Sendable
     private func streamFileData(file : URL) -> AsyncThrowingStream<String, Error> {
         
         AsyncThrowingStream {continuation in

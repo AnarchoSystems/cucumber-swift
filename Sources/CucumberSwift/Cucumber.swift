@@ -45,7 +45,7 @@ public struct ScenarioState {
     }
 }
 
-public protocol CukeReporter : Actor {
+public protocol CukeReporter {
     func reportScenario(status: ScenarioState, isFinished: Bool)
     func onStepsUndefined(_ steps: [String])
 }
@@ -58,7 +58,7 @@ public extension CukeReporter {
 
 struct MyStep\(idx) : Step {
     var match : some Matcher {
-        Cucumber.match(#/\(undefinedStep)/#) {
+        Given(#/\(undefinedStep)/#) {
             throw CucumberError.pending
         }
     }
@@ -70,7 +70,7 @@ struct MyStep\(idx) : Step {
     }
 }
 
-public actor DefaultReporter : CukeReporter {
+public struct DefaultReporter : CukeReporter {
     public func reportScenario(status: ScenarioState, isFinished: Bool) {}
 }
 
@@ -100,7 +100,7 @@ public class Cucumber {
         }
         let undefinedSteps = Set(scenarioStates.values.flatMap{$0.steps.lazy.filter{$0.state == .undefined}.map{$0.text}})
         if !undefinedSteps.isEmpty {
-            await reporter.onStepsUndefined(Array(undefinedSteps))
+            reporter.onStepsUndefined(Array(undefinedSteps))
         }
         scenarioStates = [:]
     }
@@ -123,9 +123,9 @@ public class Cucumber {
         var scenarioState = ScenarioState(id: pickle.id)
         for step in pickle.steps {
             await tryExecutePickleStep(container, step: step, scenarioState: &scenarioState)
-            await reportScenario(scenarioState)
+            reportScenario(scenarioState)
         }
-        await reportScenario(scenarioState, finish: true)
+        reportScenario(scenarioState, finish: true)
     }
     
     private func tryExecutePickleStep(_ container: any DIContainer, step: PickleStep, scenarioState: inout ScenarioState) async {
@@ -157,8 +157,8 @@ public class Cucumber {
         }
     }
     
-    private func reportScenario(_ scenarioState: ScenarioState, finish: Bool = false) async {
-        await reporter.reportScenario(status: scenarioState, isFinished: finish)
+    private func reportScenario(_ scenarioState: ScenarioState, finish: Bool = false) {
+        reporter.reportScenario(status: scenarioState, isFinished: finish)
         if finish {
             self.scenarioStates[scenarioState.id] = scenarioState
         }
