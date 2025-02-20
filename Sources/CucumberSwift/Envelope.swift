@@ -48,6 +48,7 @@ public enum Envelope : Codable {
 }
 
 public struct Pickle : Codable {
+    public let tags : [String]
     public let uri : String
     public let name : String
     public let id : String
@@ -135,8 +136,12 @@ public struct Source : Codable {
     let data : String
 }
 
+public struct Feature : Codable {
+    let name : String
+}
+
 public struct GherkinDocument : Codable {
-    
+    let feature : Feature
 }
 
 public struct ParseError : Codable, Error {

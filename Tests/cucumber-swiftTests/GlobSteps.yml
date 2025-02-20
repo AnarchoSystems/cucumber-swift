@@ -1,0 +1,30 @@
+groupName: globSteps
+steps:
+    - step: "^a\/an (unimplemented|pending|flawed|implemented) cucumber$"
+      className: GivenCucumber
+      arguments:
+        - name: cukeState
+          type: CukeState
+    - step: "^it should (print snippets|be pending|fail|work)$"
+      className: CukeExpectation
+      arguments:
+        - name: cukeResult
+          type: CukeResult
+    - step: "^a docstring:$"
+      className: GivenDocString
+    - step: "^a data table:$"
+      className: GivenDataTable
+    - step: "^cucumber reads this file$"
+      className: CukeReadsFile
+    - step: "^I am a background step$"
+      className: BackgroundStep
+types:
+    - name: CukeState
+      kind: enum
+      cases:
+       - unimplemented
+       - pending
+       - flawed
+       - implemented
+    - name: CukeResult
+      external: true

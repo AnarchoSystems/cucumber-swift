@@ -1,139 +1,122 @@
-//
-//  Cucumber.swift
-//
-//
-//  Created by Markus Kasperczyk on 23.12.23.
-//
-
 import Foundation
 
-public struct ScenarioState {
-    public let id : String
-    public var steps : [Step] = []
-    public init(id: String) {
-        self.id = id
-    }
-    public var state : State {
-        if steps.contains(where: {$0.state == .failure}) {
-            .failure
-        }
-        else if steps.contains(where: {$0.state == .pending}) {
-            .pending
-        }
-        else if steps.contains(where: {$0.state == .undefined}) {
-            .undefined
-        }
-        else {
-            .success
-        }
-    }
+// MARK: - Cucumber def
+
+public struct Cucumber {
     
-    public struct Step {
-        public let text : String
-        public let state : State
-        public init(text: String, state: State) {
-            self.text = text
-            self.state = state
-        }
-    }
-    
-    public enum State {
-        case success
-        case undefined
-        case pending
-        case failure
-    }
-}
-
-public protocol CukeReporter {
-    func reportScenario(status: ScenarioState, isFinished: Bool)
-    func onStepsUndefined(_ steps: [String])
-}
-
-public extension CukeReporter {
-    func onStepsUndefined(_ steps: [String]) {
-        for (idx, undefinedStep) in steps.enumerated() {
-            let snippet =
-"""
-
-struct MyStep\(idx) : Step {
-    var match : some Matcher {
-        Given(#/\(undefinedStep)/#) {
-            throw CucumberError.pending
-        }
-    }
-}
-
-"""
-            print(snippet)
-        }
-    }
-}
-
-public struct DefaultReporter : CukeReporter {
-    public func reportScenario(status: ScenarioState, isFinished: Bool) {}
-}
-
-public class Cucumber {
-    
-    private let DI : () -> any DIContainer
+    private let hooks : any Hooks
     private var steps : [any Step] = []
-    public var reporter : CukeReporter = DefaultReporter()
-    private var scenarioStates : [String : ScenarioState] = [:]
+    public var reporter : any CukeReporter
+    let gherkinExeUrl : URL
     
-    init<DI : DIContainerFactory>(_ diFactory: DI, steps: [any Step] = []) {
-        self.DI = diFactory.makeContainer
+    public init(hooks: any Hooks = NoHooks(), reporter: any CukeReporter = DefaultReporter(), steps: [any Step] = []) throws {
+        self.hooks = hooks
         self.steps = steps
+        self.reporter = reporter
+        self.gherkinExeUrl = try Cucumber.findGherkin()
     }
     
-    convenience init<DI : DIContainerFactory>(_ diFactory: DI, steps: (any Step)...) {
-        self.init(diFactory, steps: steps)
+    public init(hooks: Hooks = NoHooks(), reporter: any CukeReporter = DefaultReporter(), steps: (any Step)...) throws {
+        try self.init(hooks: hooks, reporter: reporter, steps: steps)
     }
     
-    public func register(_ step: (any Step)...) {
-        steps.append(contentsOf: step)
+    public mutating func register(_ steps: (any Step)...) {
+        self.steps.append(contentsOf: steps)
     }
     
-    public func run(_ url: URL) async throws {
-        for try await envelope in try Gherkin().stream(url) {
-            try await handleEnvelope(envelope)
+}
+
+// MARK: Run
+
+public typealias TagMatcher = ([String]) -> Bool
+
+extension Cucumber {
+    
+    public func run(_ url: URL, _ shouldRun: TagMatcher = {_ in true}) async throws {
+        let data = try Gherkin(gherkinExeUrl).read(url)
+        let documents = data.compactMap{if case .gherkinDocument(let doc) = $0 {return doc}; return nil}
+        guard documents.count == 1 else {
+            throw MultipleGherkinDocsRead()
         }
-        let undefinedSteps = Set(scenarioStates.values.flatMap{$0.steps.lazy.filter{$0.state == .undefined}.map{$0.text}})
-        if !undefinedSteps.isEmpty {
-            reporter.onStepsUndefined(Array(undefinedSteps))
+        var scenarioStates = [String : ScenarioState]()
+        var time : Duration!
+        reporter.reportFeatureBegin(feature: documents.first!.feature.name)
+        let timeWithHooks = try await ContinuousClock().measure {
+            if let glob = hooks.globalHook {
+                try await glob.before()
+            }
+            time = try await ContinuousClock().measure {
+                for try envelope in data {
+                    if let scenarioState = try await handleEnvelope(envelope, shouldRun) {
+                        scenarioStates[scenarioState.id] = scenarioState
+                    }
+                }
+            }
+            let undefinedSteps = Set(scenarioStates.values.flatMap{$0.steps.lazy.filter{$0.state == .undefined}.map{$0.text}})
+            if !undefinedSteps.isEmpty {
+                reporter.onStepsUndefined(Array(undefinedSteps))
+            }
+            if let glob = hooks.globalHook {
+                try await glob.after()
+            }
         }
-        scenarioStates = [:]
+        reporter.reportFeatureEnd(feature: documents.first!.feature.name,
+                                  hadErrors: scenarioStates.values.contains(where: {$0.state != .success}),
+                                  elapsedTime: time,
+                                  timeWithHooks: timeWithHooks)
     }
     
-    private func handleEnvelope(_ envelope: Envelope) async throws {
+}
+
+// MARK: - Helpers
+
+private extension Cucumber {
+    
+    func handleEnvelope(_ envelope: Envelope, _ shouldRun: TagMatcher) async throws -> ScenarioState? {
         switch envelope {
         case .pickle(let pickle):
-            await handlePickle(pickle)
-        case .source:
-            ()
-        case .gherkinDocument:
-            ()
+            if !shouldRun(pickle.tags) {
+                return nil
+            }
+            return try await handlePickle(pickle)
+        case .source, .gherkinDocument:
+            return nil
         case .parseError(let error):
             throw error
         }
     }
     
-    private func handlePickle(_ pickle: Pickle) async {
-        let container = DI()
-        var scenarioState = ScenarioState(id: pickle.id)
-        for step in pickle.steps {
-            await tryExecutePickleStep(container, step: step, scenarioState: &scenarioState)
-            reportScenario(scenarioState)
+    func handlePickle(_ pickle: Pickle) async throws -> ScenarioState {
+        let hooks = self.hooks.hooks.filter{$0.shouldRun(pickle.tags)}
+        let container = StateContainer()
+        var scenarioState = ScenarioState(id: pickle.id + ": \"" + pickle.name + "\"")
+        var time : Duration!
+        let timeWithHooks = try await ContinuousClock().measure {
+            for hook in hooks {
+                try container.inject(into: hook)
+                try await hook.before()
+            }
+            time = await ContinuousClock().measure {
+                for step in pickle.steps {
+                    await tryExecutePickleStep(container, step: step, scenarioState: &scenarioState)
+                    reporter.reportRunningScenario(status: scenarioState)
+                }
+            }
+            for hook in hooks.reversed() {
+                try await hook.after()
+            }
         }
-        reportScenario(scenarioState, finish: true)
+        reporter.reportFinishedScenario(status: scenarioState,
+                                        elapsedTime: time,
+                                        timeWithHooks: timeWithHooks)
+        return scenarioState
     }
     
-    private func tryExecutePickleStep(_ container: any DIContainer, step: PickleStep, scenarioState: inout ScenarioState) async {
+    func tryExecutePickleStep(_ container: StateContainer, step: PickleStep, scenarioState: inout ScenarioState) async {
         do {
             let matches = try steps.compactMap{stp in try stp.match.match(step.text).map{match in (stp, match)}}
             if matches.isEmpty {
-                scenarioState.steps.append(.init(text: step.text,
-                                                 state: .undefined))
+                scenarioState.steps.append(.undefined(step.text))
                 // add to undefined steps
             }
             if matches.count > 1 {
@@ -143,41 +126,71 @@ public class Cucumber {
                 return
             }
             let (stp, match) = matches.first!
-            try stp.inject(from: container)
+            try container.inject(into: stp)
             if let argument = step.argument {
                 try stp.readArgs(args: argument)
             }
             try await stp.match.invoke(with: match)
+            scenarioState.steps.append(.success(step.text))
         }
-        catch CucumberError.pending {
-            scenarioState.steps.append(.init(text: step.text, state: .pending))
+        catch let error as Pending {
+            _ = error
+            scenarioState.steps.append(.pending(step.text))
         }
         catch {
-            scenarioState.steps.append(.init(text: step.text, state: .failure))
+            scenarioState.steps.append(.failure(step.text, error))
         }
     }
     
-    private func reportScenario(_ scenarioState: ScenarioState, finish: Bool = false) {
-        reporter.reportScenario(status: scenarioState, isFinished: finish)
-        if finish {
-            self.scenarioStates[scenarioState.id] = scenarioState
+    static func findGherkin() throws -> URL {
+        let mgr = FileManager.default
+        guard let path : [URL] = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":").lazy.map(String.init).compactMap(URL.init(string:)) else {
+            throw InternalCucumberError.pathNotDefined
         }
+        for dir in path {
+            let url = dir.appending(path: "gherkin")
+            if mgr.fileExists(atPath: url.absoluteString) {
+                return url
+            }
+        }
+        throw InternalCucumberError.couldNotFindGherkin(path: path)
     }
     
 }
 
-enum InternalCucumberError : Error {
+public struct MultipleGherkinDocsRead : LocalizedError {
+    public let errorDescription: String = "Found multiple Gherkin documents"
+}
+
+public enum InternalCucumberError : LocalizedError {
     case ambiguousMatch([String])
+    case pathNotDefined
+    case couldNotFindGherkin(path: [URL])
+    public var errorDescription: String {
+        switch self {
+        case .ambiguousMatch:
+            "Multiple Steps Match"
+        case .pathNotDefined:
+            "$PATH Not Defined"
+        case .couldNotFindGherkin:
+            "Gherkin not found"
+        }
+    }
+    public var failureReason: String {
+        switch self {
+        case .ambiguousMatch(let array):
+            "Possible Steps:\n" + array.map{"  - " + $0}.joined(separator: "\n")
+        case .pathNotDefined:
+            "Your environment does not seem to contain $PATH"
+        case .couldNotFindGherkin(let path):
+            "Searching in the following directories:\n" + path.map{"  - " + $0.absoluteString}.joined(separator: "\n")
+        }
+    }
 }
 
-public enum CucumberError : Error {
-    case pending
-}
+// MARK: - Helper types
 
 extension Step {
-    func inject(from container: any DIContainer) throws {
-        try container.inject(into: self)
-    }
     func readArgs(args: PickleArg) throws {
         for (_, child) in Mirror(reflecting: self).children {
             if let reader = child as? PickleArgReader {
@@ -251,7 +264,18 @@ public class Examples<T : Codable> : PickleArgReader {
     }
 }
 
-public enum InvalidPickleArg : Error {
+public enum InvalidPickleArg : LocalizedError {
     case expectedDocString
     case expectedDataTable
+    public var errorDescription: String? {
+        "Unexpected Argument Type"
+    }
+    public var failureReason: String? {
+        switch self {
+        case .expectedDocString:
+            "Expected a docstring"
+        case .expectedDataTable:
+            "Expected a data table"
+        }
+    }
 }

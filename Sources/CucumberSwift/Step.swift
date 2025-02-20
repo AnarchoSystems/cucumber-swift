@@ -6,6 +6,6 @@
 //
 
 public protocol Step {
-    associatedtype Match : Matcher
-    var match : Match {get}
+    associatedtype Matcher : CucumberSwift.Matcher
+    var match : Matcher {get}
 }

@@ -1,201 +1,157 @@
 import XCTest
-@testable import CucumberSwift
+import CucumberSwift
 
 final class cucumber_swiftTests: XCTestCase {
-    func testExample() async throws {
+    func testRunAllScenarios() async throws {
         let bundle = Bundle.module
         guard let path = bundle.path(forResource: "Test", ofType: "feature") else {
-            return XCTFail()
+            try cukeFail()
         }
-        let cucumber = Cucumber(FakeDI(theFile: URL(filePath: path)),
-                                steps: GivenCucumber(), CukeExpectation(), GivenDocString(), GivenDataTable(), CukeReadsFile())
+        let cucumber = try Cucumber(hooks: AllHooks(url: URL(filePath: path)),
+                                    reporter: DefaultReporter(snippetDialect: SnippetDialects.yaml),
+                                    steps: Cucumber.globSteps)
+        
         try await cucumber.run(URL(filePath: path))
     }
 }
 
-class Ref<T> {
-    var val : T!
-    init(val: T? = nil) {
-        self.val = val
-    }
-}
-
-@propertyWrapper
-class Cuke {
-    var ref = Ref<Cucumber>()
-    var wrappedValue : Cucumber {
-        ref.val
-    }
-}
-
-@propertyWrapper
-class TestResult {
-    var ref = Ref<CukeResult>()
-    var wrappedValue : CukeResult {
-        get{
-            ref.val
-        }
-        set {
-            ref.val = newValue
-        }
-    }
-}
-
-@propertyWrapper
-class TheFile {
-    var wrapped : URL?
-    var wrappedValue : URL {
-        wrapped!
-    }
-}
-
-struct EmptyDIContainerFacotry : DIContainerFactory {
-    func makeContainer() -> some DIContainer {
-        struct Ctr : DIContainer {
-            func inject<S>(into step: S) throws where S : Step {}
-        }
-        return Ctr()
-    }
-}
-
-struct FakeDI : DIContainer, DIContainerFactory {
+struct SetUrlHook : Hook {
     
-    func makeContainer() -> some DIContainer {
-        FakeDI(theFile: theFile)
+    let url: URL
+    @Scenario(\.file) var file: URL?
+    
+    func before() {
+        file = url
     }
     
-    let cukeUnderTest = Ref(val: Cucumber(EmptyDIContainerFacotry()))
-    let result = Ref(val: CukeResult.fail)
-    let theFile : URL
+}
+
+struct AllHooks : Hooks {
+    let url : URL
+    var hooks: [any Hook] {
+        [SetUrlHook(url: url)]
+    }
+}
+
+struct SomeError : LocalizedError {
+    var errorDescription: String? {
+        "Holy Smoke!"
+    }
+    var failureReason: String? {
+        "A problem has transpired"
+    }
+}
+
+extension StateContainer {
+    @ContainerStorage var cucumber : Cucumber?
+    @ContainerStorage var file : URL?
+    @ContainerStorage var result : CukeResult?
+}
+
+struct BackgroundStep {
+    func onRecognize() async throws {}
+}
+
+struct GivenCucumber {
     
-    func inject<S>(into step: S) throws where S : CucumberSwift.Step {
-        for (_, child) in Mirror(reflecting: step).children {
-            if let cuke = child as? Cuke {
-                cuke.ref = cukeUnderTest
+    @Scenario(\.cucumber) var cucumber
+    
+    func onRecognize(cukeState: CukeState) throws {
+        cucumber = try Cucumber()
+        switch cukeState {
+        case .unimplemented:
+            ()
+        case .pending:
+            struct MatchAllPending : Step {
+                var match : some Matcher { #Given(#/.*/#) { throw Pending()} }
             }
-            else if let res = child as? TestResult {
-                res.ref = result
+            cucumber!.register(MatchAllPending())
+        case .implemented:
+            struct MatchAllSucceed : Step {
+                var match : some Matcher { #Match(#/.*/#) { } }
             }
-            else if let url = child as? TheFile {
-                url.wrapped = theFile
+            cucumber!.register(MatchAllSucceed())
+        case .flawed:
+            struct MatchAllFail : Step {
+                var match : some Matcher { #Match(#/.*/#) { throw SomeError()} }
             }
+            cucumber!.register(MatchAllFail())
         }
     }
     
 }
 
-enum CukeState : String {
-    case unimplemented, pending, implemented, flawed
-}
-
-struct SomeError : Error {}
-
-struct GivenCucumber : Step {
-    
-    @Cuke var cucumber
-    
-    var match : some Matcher {
-        Given(#/a/an (unimplemented|pending|flawed|implemented) cucumber/#) {cukeState in
-            switch CukeState(rawValue: String(cukeState))! {
-            case .unimplemented:
-                ()
-            case .pending:
-                struct MatchAllPending : Step {
-                    var match : some Matcher { Given(#/(.*)/#) {_ in throw CucumberError.pending} }
-                }
-                cucumber.register(MatchAllPending())
-            case .implemented:
-                struct MatchAllSucceed : Step {
-                    var match : some Matcher { Given(#/(.*)/#) {_ in } }
-                }
-                cucumber.register(MatchAllSucceed())
-            case .flawed:
-                struct MatchAllFail : Step {
-                    var match : some Matcher { Given(#/(.*)/#) {_ in throw SomeError()} }
-                }
-                cucumber.register(MatchAllFail())
-            }
-        }
-    }
-    
-}
-
-enum CukeResult : String {
+public enum CukeResult : String {
     case printSnippets = "print snippets"
     case bePending = "be pending"
     case fail
     case work
 }
 
-struct CukeExpectation : Step {
+struct CukeExpectation {
     
-    @TestResult var result
+    @Required(\.result) var result
     
-    var match : some Matcher {
-        Then(#/it should (print snippets|be pending|fail|work)/#) {arg in
-            XCTAssertEqual(result, CukeResult(rawValue: String(arg))!)
-        }
+    func onRecognize(cukeResult: CukeResult) throws {
+        try cukeAssertEqual(result, cukeResult)
     }
     
 }
 
-struct GivenDocString : Step {
+struct GivenDocString {
     
     @DocString var docString
     
-    var match : some Matcher {
-        Given(#/a docstring:/#) {
-            XCTAssert(!docString.isEmpty)
-        }
+    func onRecognize() throws {
+        try cukeAssert(!docString.isEmpty)
     }
+    
 }
 
 struct TestData : Codable {
     let example_data : String
 }
 
-struct GivenDataTable : Step {
+struct GivenDataTable {
     
     @Examples var examples : [TestData]
     
-    var match : some Matcher {
-        Given(#/a data table:/#) {
-            XCTAssert(!examples.isEmpty)
+    func onRecognize() throws {
+        try cukeAssert(!examples.isEmpty)
+    }
+    
+}
+
+struct CukeReadsFile {
+    
+    @Required(\.cucumber) var cucumber
+    @Required(\.file) var url
+    @Scenario(\.result) var result
+    
+    func onRecognize() async throws {
+        class Reporter : CukeReporter {
+            var result : CukeResult = .fail
+            func reportFinishedScenario(status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration) {
+                switch status.state {
+                case .success:
+                    result = .work
+                case .undefined:
+                    ()
+                case .pending:
+                    result = .bePending
+                case .failure:
+                    result = .fail
+                }
+            }
+            func onStepsUndefined(_ steps: [String]) {
+                result = .printSnippets
+            }
+            func reportFeatureEnd(hadErrors: Bool) {}
         }
+        let reporter = Reporter()
+        cucumber.reporter = reporter
+        try? await cucumber.run(url)
+        result = reporter.result
     }
 }
 
-struct CukeReadsFile : Step {
-    
-    @Cuke var cucumber
-    @TheFile var url
-    @TestResult var result
-    
-    var match : some Matcher {
-        When(#/cucumber reads this file/#) {
-            class Reporter : CukeReporter {
-                var result : CukeResult = .fail
-                func reportScenario(status: ScenarioState, isFinished: Bool) {
-                    guard isFinished else {return}
-                    switch status.state {
-                    case .success:
-                        result = .work
-                    case .undefined:
-                        ()
-                    case .pending:
-                        result = .bePending
-                    case .failure:
-                        result = .fail
-                    }
-                }
-                func onStepsUndefined(_ steps: [String]) {
-                    result = .printSnippets
-                }
-            }
-            let reporter = Reporter()
-            cucumber.reporter = reporter
-            try await cucumber.run(url)
-            result = reporter.result
-        }
-    }
-}
