@@ -43,14 +43,28 @@ extension Cucumber {
         reporter.reportFeatureBegin(feature: documents.first!.feature.name)
         let timeWithHooks = try await ContinuousClock().measure {
             if let glob = hooks.globalHook {
-                try await glob.before()
+                do {
+                    try await glob.before()
+                }
+                catch {
+                    try await glob.after()
+                    throw error
+                }
             }
-            time = try await ContinuousClock().measure {
-                for try envelope in data {
-                    if let scenarioState = try await handleEnvelope(envelope, shouldRun) {
-                        scenarioStates[scenarioState.id] = scenarioState
+            do {
+                time = try await ContinuousClock().measure {
+                    for try envelope in data {
+                        if let scenarioState = try await handleEnvelope(envelope, shouldRun) {
+                            scenarioStates[scenarioState.id] = scenarioState
+                        }
                     }
                 }
+            }
+            catch {
+                if let glob = hooks.globalHook {
+                    try await glob.after()
+                }
+                throw error
             }
             let undefinedSteps = Set(scenarioStates.values.flatMap{$0.steps.lazy.filter{$0.state == .undefined}.map{$0.text}})
             if !undefinedSteps.isEmpty {
@@ -92,9 +106,19 @@ private extension Cucumber {
         var scenarioState = ScenarioState(id: pickle.id + ": \"" + pickle.name + "\"")
         var time : Duration!
         let timeWithHooks = try await ContinuousClock().measure {
+            var hooksToUndo : [any Hook] = []
             for hook in hooks {
-                try container.inject(into: hook)
-                try await hook.before()
+                hooksToUndo.append(hook)
+                do {
+                    try container.inject(into: hook)
+                    try await hook.before()
+                }
+                catch {
+                    for hook in hooksToUndo.reversed() {
+                        try await hook.after()
+                    }
+                    throw error
+                }
             }
             time = await ContinuousClock().measure {
                 for step in pickle.steps {
