@@ -128,11 +128,17 @@ public struct DefaultReporter : CukeReporter {
         case .pending:
             fputs("\tFull implementation of scenario \(status.id) pending.\n\n", stderr)
         case .failure:
-            var report = "Scenario \(status.id) failed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\tDetails:\n"
+            var report = "\tScenario \(status.id) failed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\t\tDetails:\n"
             for step in status.steps {
-                report.append("\t - " + step.text + ": " + step.state.rawValue + "\n")
+                report.append("\t\t - " + step.text + ": " + step.state.rawValue + "\n")
                 if let error = step.error {
-                    report.append("\t\t - Reason: \(error.localizedDescription)\n")
+                    if let localizedErr = error as? LocalizedError {
+                        report.append("\t\t\t - Error: \(localizedErr.errorDescription ?? localizedErr.localizedDescription)\n")
+                        if let reason = localizedErr.failureReason {
+                            report.append("\t\t\t - Reason: \(reason)\n")
+                        }
+                    }
+                    report.append("\t\t\t - Reason: \(error.localizedDescription)\n")
                 }
             }
             report.append("\n")
