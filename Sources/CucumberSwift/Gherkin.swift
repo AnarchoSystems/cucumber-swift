@@ -66,5 +66,5 @@ public struct Gherkin : Sendable {
 }
 
 public struct ProcessError : LocalizedError {
-    public let errorDescription: String
+    public let errorDescription: String?
 }

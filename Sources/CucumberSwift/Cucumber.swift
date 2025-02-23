@@ -183,14 +183,14 @@ private extension Cucumber {
 }
 
 public struct MultipleGherkinDocsRead : LocalizedError {
-    public let errorDescription: String = "Found multiple Gherkin documents"
+    public let errorDescription: String? = "Found multiple Gherkin documents"
 }
 
 public enum InternalCucumberError : LocalizedError {
     case ambiguousMatch([String])
     case pathNotDefined
     case couldNotFindGherkin(path: [URL])
-    public var errorDescription: String {
+    public var errorDescription: String? {
         switch self {
         case .ambiguousMatch:
             "Multiple Steps Match"
@@ -200,7 +200,7 @@ public enum InternalCucumberError : LocalizedError {
             "Gherkin not found"
         }
     }
-    public var failureReason: String {
+    public var failureReason: String? {
         switch self {
         case .ambiguousMatch(let array):
             "Possible Steps:\n" + array.map{"  - " + $0}.joined(separator: "\n")
