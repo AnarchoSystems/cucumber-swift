@@ -117,16 +117,16 @@ public struct DefaultReporter : CukeReporter {
         self.dialect = snippetDialect
     }
     public func reportFeatureBegin(feature: String) {
-        fputs("\nRunning feature \"\(feature)\"...\n\(divider)\n\n", stdout)
+        print("\nRunning feature \"\(feature)\"...\n\(divider)\n\n")
     }
     public func reportFinishedScenario(status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration) {
         switch status.state {
         case .success:
-            fputs("\tScenario \(status.id) passed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\n", stdout)
+            print("\tScenario \(status.id) passed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\n")
         case .undefined:
-            fputs("\tScenario \(status.id) has undefined steps.\n\n", stderr)
+            print("\tScenario \(status.id) has undefined steps.\n\n")
         case .pending:
-            fputs("\tFull implementation of scenario \(status.id) pending.\n\n", stderr)
+            print("\tFull implementation of scenario \(status.id) pending.\n\n")
         case .failure:
             var report = "\tScenario \(status.id) failed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\t\tDetails:\n"
             for step in status.steps {
@@ -142,17 +142,17 @@ public struct DefaultReporter : CukeReporter {
                 }
             }
             report.append("\n")
-            fputs(report, stderr)
+            print(report)
         }
     }
     public func onStepsUndefined(_ steps: [String]) {
         
-        fputs("\(divider)\n\n\tUndefined steps:\n\n", stdout)
+        print("\(divider)\n\n\tUndefined steps:\n\n")
         
-        fputs(dialect.generateSnippets(steps), stdout)
+        print(dialect.generateSnippets(steps))
     }
     public func reportFeatureEnd(feature: String, hadErrors: Bool, elapsedTime: Duration, timeWithHooks: Duration) {
-        fputs("\n\(divider)\n\nFeature \(feature) completed \(hadErrors ? "with errors" : "successfully").\nTotal duration: \(elapsedTime).\nTime with hooks: \(timeWithHooks).\n\n", stdout)
+        print("\n\(divider)\n\nFeature \(feature) completed \(hadErrors ? "with errors" : "successfully").\nTotal duration: \(elapsedTime).\nTime with hooks: \(timeWithHooks).\n\n")
         if hadErrors {
             exit(EXIT_FAILURE)
         }
