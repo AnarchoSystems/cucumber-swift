@@ -4,5 +4,5 @@ import Gherkin
 public protocol Step {
     var regexText: String { get }
     func match(_ step: PickleStep) throws -> (() async throws -> Void)?
-    var reporter: CukeReporter { get set }
+    var reporter: any CukeReporter { get }
 }

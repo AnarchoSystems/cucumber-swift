@@ -60,7 +60,7 @@ extension StateContainer {
     @ContainerStorage var counter: Counter = Counter()
 }
 
-@Test 
+@Test
 func testContainerStorageWithRef() {
     let container = StateContainer()
     container.counter.increment()
@@ -224,4 +224,84 @@ public struct CukeReadsFile: Step {
 
         result = stepReporter.result
     }
+}
+
+struct StepLogger {
+    var logs: [String] = []
+}
+
+extension StateContainer {
+    @ContainerStorage var stepLogger: StepLogger = StepLogger()
+}
+
+@Test
+func testStepDecorator() async throws {
+
+    struct LoggingStepDecorator: StepDecorator {
+
+        let decoratedStep: any Step
+        @Required(\.stepLogger) var stepLogger
+
+        init(_ decoratedStep: any Step) {
+            self.decoratedStep = decoratedStep
+        }
+
+        func run(_ stepCode: () async throws -> Void, _ matchedText: String) async throws {
+            stepLogger.logs.append("Before \(matchedText)")
+            try await stepCode()
+            stepLogger.logs.append("After \(matchedText)")
+        }
+    }
+
+    struct SomeStep: Step {
+        @Given(/^I am a step$/)
+        func onRecognize() {}
+    }
+
+    struct AnotherStep: Step {
+        @Given(/^I am another step$/)
+        func onRecognize() {}
+    }
+
+    let feature =
+        """
+        Feature: Step Decorator
+          Scenario: Logging Step Decorator
+            Given I am a step
+            Given I am another step
+        """
+
+    let parser = Parser()
+    let compiler = PickleCompiler()
+    let pickles = try compiler.compile(
+        document: parser.parse(source: feature), uri: "SimpleFeature.feature")
+
+    let collection = StepCollection(steps: [SomeStep(), AnotherStep()]).map(
+        LoggingStepDecorator.self)
+
+    let container = StateContainer()
+    container.reporter = NoReporter()
+
+    for pickle in pickles {
+        try await Cucumber.run(scenario: pickle, on: container, using: collection)
+        #expect(
+            container.stepLogger.logs == [
+                "Before I am a step",
+                "After I am a step",
+                "Before I am another step",
+                "After I am another step",
+            ])
+    }
+
+}
+
+@Test
+func testNiceRegexTextGeneration() {
+    struct SomeStep: Step {
+        @Given(/^I am a step$/)
+        func onRecognize() {}
+    }
+
+    #expect(SomeStep().regexText == "^I am a step$")
+
 }

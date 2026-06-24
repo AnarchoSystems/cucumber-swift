@@ -2,6 +2,54 @@ import SwiftSyntax
 import SwiftSyntaxMacros
 
 private struct StepMethodMacro {
+    private static func regexPatternText(from regexLiteral: String) throws -> String {
+        let trimmed = regexLiteral.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw MacroError.message("Step macro requires a non-empty regex literal")
+        }
+
+        let hashCount = trimmed.prefix { $0 == "#" }.count
+        let startSlashIndex = trimmed.index(trimmed.startIndex, offsetBy: hashCount)
+        guard startSlashIndex < trimmed.endIndex, trimmed[startSlashIndex] == "/" else {
+            throw MacroError.message("Unsupported regex literal form")
+        }
+
+        let endHashStart = trimmed.index(trimmed.endIndex, offsetBy: -hashCount)
+        guard endHashStart > startSlashIndex else {
+            throw MacroError.message("Unsupported regex literal form")
+        }
+
+        let closingSlashIndex = trimmed.index(before: endHashStart)
+        guard trimmed[closingSlashIndex] == "/" else {
+            throw MacroError.message("Unsupported regex literal form")
+        }
+
+        let patternStart = trimmed.index(after: startSlashIndex)
+        return String(trimmed[patternStart..<closingSlashIndex])
+    }
+
+    private static func swiftStringLiteral(_ value: String) -> String {
+        var escaped = "\""
+        for char in value {
+            switch char {
+            case "\\":
+                escaped += "\\\\"
+            case "\"":
+                escaped += "\\\""
+            case "\n":
+                escaped += "\\n"
+            case "\r":
+                escaped += "\\r"
+            case "\t":
+                escaped += "\\t"
+            default:
+                escaped.append(char)
+            }
+        }
+        escaped += "\""
+        return escaped
+    }
+
     private enum StepArgKind {
         case none
         case docString
@@ -90,6 +138,8 @@ private struct StepMethodMacro {
         }
 
         let regexLiteral = firstArg.expression.description
+        let regexPattern = try regexPatternText(from: regexLiteral)
+        let regexPatternLiteral = swiftStringLiteral(regexPattern)
         let stepArgKind = try StepArgKind.parse(args.dropFirst().first?.expression)
 
         let funcName = function.name.text
@@ -295,7 +345,7 @@ private struct StepMethodMacro {
                     pattern: IdentifierPatternSyntax(identifier: .identifier("reporter")),
                     typeAnnotation: TypeAnnotationSyntax(
                         colon: .colonToken(trailingTrivia: .space),
-                        type: IdentifierTypeSyntax(name: "CukeReporter")
+                        type: IdentifierTypeSyntax(name: "any CukeReporter")
                     ),
                     accessorBlock: AccessorBlockSyntax(
                         accessors: .accessors(AccessorDeclListSyntax([
@@ -307,7 +357,7 @@ private struct StepMethodMacro {
             ])
         )
 
-        let regexTextDecl = "public var regexText: String { String(describing: \(regexLiteral)) }"
+        let regexTextDecl = "public var regexText: String { \(regexPatternLiteral) }"
         
         return [
             DeclSyntax(reporterBackingDecl),
