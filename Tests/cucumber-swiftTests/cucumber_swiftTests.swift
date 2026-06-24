@@ -9,10 +9,9 @@ func allScenarios() -> [Pickle] {
     }
 
     let fileURL = URL(filePath: path)
-    return (
-        try? Cucumber.findScenarios(in: fileURL.deletingLastPathComponent())
-            .filter { $0.uri == fileURL.absoluteString }
-    ) ?? []
+    return
+        (try? Cucumber.findScenarios(in: fileURL.deletingLastPathComponent())
+        .filter { $0.uri == fileURL.absoluteString }) ?? []
 }
 
 @Test(arguments: allScenarios())
@@ -47,10 +46,30 @@ struct SomeError: LocalizedError {
     }
 }
 
+class Counter {
+    private(set) var count = 0
+    func increment() {
+        count += 1
+    }
+}
+
 extension StateContainer {
     @ContainerStorage var cucumber: StepCollection?
     @ContainerStorage var file: URL?
     @ContainerStorage var result: CukeResult?
+    @ContainerStorage var counter: Counter = Counter()
+}
+
+@Test 
+func testContainerStorageWithRef() {
+    let container = StateContainer()
+    container.counter.increment()
+    container.counter.increment()
+    #expect(container.counter.count == 2)
+    container.counter = Counter()
+    #expect(container.counter.count == 0)
+    container.counter.increment()
+    #expect(container.counter.count == 1)
 }
 
 public enum CukeState: String, CukeStringRawRepresentable {
@@ -123,7 +142,7 @@ public struct TestData: Codable, CodableDataTableDecodable {
 }
 
 public struct GivenDataTable: Step {
-    @Given(/^a data table:$/, .table(.rowMajor, hasHeader:  true))
+    @Given(/^a data table:$/, .table(.rowMajor, hasHeader: true))
     func onRecognize(_ table: [TestData]) {
         cukeExpect(!table.isEmpty)
     }

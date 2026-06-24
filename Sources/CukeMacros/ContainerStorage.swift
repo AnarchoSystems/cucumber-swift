@@ -64,9 +64,20 @@ public struct ContainerStorageMacro: AccessorMacro, PeerMacro {
         
         let expData = try extract(from: declaration)
         
+        let createIfNotFound = expData.initializerValue.map{initializer in 
+            """
+            if self[\(expData.keyName).self] == nil {
+                self[\(expData.keyName).self] = \(initializer)
+            }
+            """
+        } ?? ""
+
         return [
             """
-            get { self[\(raw: expData.keyName).self]\(raw: expData.initializerValue.map { " ?? " + $0 } ?? "") }
+            get { 
+                \(raw: createIfNotFound)
+                return self[\(raw: expData.keyName).self]\(raw: expData.initializerValue.map {_ in "!" } ?? "") 
+            }
             set { self[\(raw: expData.keyName).self] = newValue }
             """
         ]
