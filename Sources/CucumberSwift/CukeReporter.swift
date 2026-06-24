@@ -1,47 +1,59 @@
 import Foundation
+import Gherkin
 
 let divider = "------------------------------------------------------------------------"
 
 public struct ScenarioState {
-    public let id : String
-    public var steps : [Step] = []
-    public init(id: String) {
+    public let id: String
+    public let name: String
+    public let uri: String?
+    public var steps: [Step] = []
+
+    public init(id: String, name: String, uri: String? = nil) {
         self.id = id
+        self.name = name
+        self.uri = uri
     }
-    public var state : State {
-        if steps.contains(where: {$0.state == .failure}) {
+
+    public var state: State {
+        if steps.contains(where: { $0.state == .failure }) {
             .failure
         }
-        else if steps.contains(where: {$0.state == .pending}) {
+        else if steps.contains(where: { $0.state == .pending }) {
             .pending
         }
-        else if steps.contains(where: {$0.state == .undefined}) {
+        else if steps.contains(where: { $0.state == .undefined }) {
             .undefined
         }
         else {
             .success
         }
     }
-    
+
     public struct Step {
-        public let text : String
-        public let state : State
-        public let error : Error?
-        public static func success(_ text: String) -> Step {
-            .init(text: text, state: .success, error: nil)
+        public let text: String
+        public let location: Gherkin.Location?
+        public let state: State
+        public let error: Error?
+
+        public static func success(_ text: String, location: Gherkin.Location? = nil) -> Step {
+            .init(text: text, location: location, state: .success, error: nil)
         }
-        public static func undefined(_ text: String) -> Step {
-            .init(text: text, state: .undefined, error: nil)
+
+        public static func undefined(_ text: String, location: Gherkin.Location? = nil) -> Step {
+            .init(text: text, location: location, state: .undefined, error: nil)
         }
-        public static func pending(_ text: String) -> Step {
-            .init(text: text, state: .pending, error: nil)
+
+        public static func pending(_ text: String, location: Gherkin.Location? = nil) -> Step {
+            .init(text: text, location: location, state: .pending, error: nil)
         }
-        public static func failure(_ text: String, _ error: Error) -> Step {
-            .init(text: text, state: .failure, error: error)
+
+        public static func failure(_ text: String, location: Gherkin.Location? = nil, _ error: Error) -> Step {
+            .init(text: text, location: location, state: .failure, error: error)
         }
     }
-    
-    public enum State : String {
+
+    public enum State: String {
         case success
         case undefined
         case pending
@@ -50,57 +62,58 @@ public struct ScenarioState {
 }
 
 public protocol CukeReporter {
-    func reportFeatureBegin(feature: String)
     func reportRunningScenario(status: ScenarioState)
     func reportFinishedScenario(status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration)
-    func onStepsUndefined(_ steps: [String])
-    func reportFeatureEnd(feature: String, hadErrors: Bool, elapsedTime: Duration, timeWithHooks: Duration)
+    func onStepsUndefined(_ steps: [ScenarioState.Step])
+    func reportAssertionFailure(message: String, file: StaticString, line: UInt)
 }
 
 public extension CukeReporter {
-    func reportFeatureBegin(feature: String) {}
     func reportRunningScenario(status: ScenarioState) {}
     func reportFinishedScenario(status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration) {}
-    func onStepsUndefined(_ steps: [String]) {}
-    func reportFeatureEnd(feature: String, hadErrors: Bool, elapsedTime: Duration, timeWithHooks: Duration) {}
+    func onStepsUndefined(_ steps: [ScenarioState.Step]) {}
+    func reportAssertionFailure(message: String, file: StaticString, line: UInt) {}
 }
 
-public struct NoReporter : CukeReporter {}
+public struct NoReporter : CukeReporter {
+    public init() {}
+}
 
 public protocol SnippetDialect {
-    func generateSnippets(_ undefinedSteps: [String]) -> String
+    func generateSnippets(_ undefinedSteps: [ScenarioState.Step]) -> String
 }
 
 public struct SwiftSnippetDialect : SnippetDialect {
-    public func generateSnippets(_ steps: [String]) -> String {
-        
-        var snippet = ""
-        
-        for (idx, undefinedStep) in steps.enumerated() {
-            let next =
-    """
-    
-        struct MyStep\(idx) : Step {
-            var match : some Matcher {
-                #Given(#/^\(undefinedStep)$/#) {
-                    throw CucumberError.pending
+    public func generateSnippets(_ steps: [ScenarioState.Step]) -> String {
+        steps.enumerated().map { index, step in
+            let locationComment: String
+            if let location = step.location {
+                locationComment = "// line \(location.line), column \(location.column)"
+            } else {
+                locationComment = "// location unavailable"
+            }
+
+            return """
+
+            \(locationComment)
+            struct MyStep\(index): Step {
+                @Given(#/^\(step.text)$/#)
+                func onRecognize() throws {
+                    throw Cucumber.Pending()
                 }
             }
+
+            """
         }
-    
-    """
-            snippet.append(next)
-        }
-        
-        return snippet
+        .joined(separator: "\n")
     }
 }
 
 public struct YamlSnippetDialect : SnippetDialect {
-    public func generateSnippets(_ steps: [String]) -> String {
+    public func generateSnippets(_ steps: [ScenarioState.Step]) -> String {
         var snippet = "groupName: MyGroup\nsteps:\n"
         for (idx, step) in steps.enumerated() {
-            snippet.append(" - step: \"^\(step)$\"\n   className: MyStep\(idx)\n")
+            snippet.append(" - step: \"^\(step.text)$\"\n   className: MyStep\(idx)\n")
         }
         return snippet
     }
@@ -112,25 +125,24 @@ public enum SnippetDialects {
 }
 
 public struct DefaultReporter : CukeReporter {
-    public var dialect : SnippetDialect
+    public var dialect: SnippetDialect
     public init(snippetDialect: SnippetDialect = SnippetDialects.swift) {
         self.dialect = snippetDialect
     }
-    public func reportFeatureBegin(feature: String) {
-        print("\nRunning feature \"\(feature)\"...\n\(divider)\n\n")
-    }
     public func reportFinishedScenario(status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration) {
+        let scenarioTitle = status.name.isEmpty ? status.id : status.name
         switch status.state {
         case .success:
-            print("\tScenario \(status.id) passed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\n")
+            print("\tScenario \(scenarioTitle) passed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\n")
         case .undefined:
-            print("\tScenario \(status.id) has undefined steps.\n\n")
+            print("\tScenario \(scenarioTitle) has undefined steps.\n\n")
         case .pending:
-            print("\tFull implementation of scenario \(status.id) pending.\n\n")
+            print("\tFull implementation of scenario \(scenarioTitle) pending.\n\n")
         case .failure:
-            var report = "\tScenario \(status.id) failed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\t\tDetails:\n"
+            var report = "\tScenario \(scenarioTitle) failed after \(elapsedTime) (\(timeWithHooks) with hooks).\n\t\tDetails:\n"
             for step in status.steps {
-                report.append("\t\t - " + step.text + ": " + step.state.rawValue + "\n")
+                let locationText = step.location.map { " [\($0.line):\($0.column)]" } ?? ""
+                report.append("\t\t - " + step.text + locationText + ": " + step.state.rawValue + "\n")
                 if let error = step.error {
                     if let localizedErr = error as? LocalizedError {
                         report.append("\t\t\t - Error: \(localizedErr.errorDescription ?? localizedErr.localizedDescription)\n")
@@ -145,16 +157,11 @@ public struct DefaultReporter : CukeReporter {
             print(report)
         }
     }
-    public func onStepsUndefined(_ steps: [String]) {
-        
+    public func onStepsUndefined(_ steps: [ScenarioState.Step]) {
         print("\(divider)\n\n\tUndefined steps:\n\n")
-        
         print(dialect.generateSnippets(steps))
     }
-    public func reportFeatureEnd(feature: String, hadErrors: Bool, elapsedTime: Duration, timeWithHooks: Duration) {
-        print("\n\(divider)\n\nFeature \(feature) completed \(hadErrors ? "with errors" : "successfully").\nTotal duration: \(elapsedTime).\nTime with hooks: \(timeWithHooks).\n\n")
-        if hadErrors {
-            exit(EXIT_FAILURE)
-        }
+    public func reportAssertionFailure(message: String, file: StaticString, line: UInt) {
+        print("\tAssertion failed at \(file):\(line): \(message)\n")
     }
 }

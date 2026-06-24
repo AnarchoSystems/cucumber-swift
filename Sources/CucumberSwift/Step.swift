@@ -1,11 +1,8 @@
-//
-//  Step.swift
-//
-//
-//  Created by Markus Kasperczyk on 23.12.23.
-//
+import Foundation
+import Gherkin
 
 public protocol Step {
-    associatedtype Matcher : CucumberSwift.Matcher
-    var match : Matcher {get}
+    var regexText: String { get }
+    func match(_ step: PickleStep) throws -> (() async throws -> Void)?
+    var reporter: CukeReporter { get set }
 }

@@ -5,7 +5,7 @@ Feature: Test a variety of gherkin features
     Background:
         * I am a background step
     
-    Scenario Outline: Docstring and Examples
+    Scenario Outline: A <implemented> Cucumber
         Given a/an <implemented> cucumber
         Given a docstring:
         """

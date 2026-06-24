@@ -12,10 +12,9 @@ let package = Package(
         .library(
             name: "CucumberSwift",
             targets: ["CucumberSwift"]),
-        .plugin(name: "GenSteps", targets: ["GenSteps"])
     ],
-    dependencies: [.package(url: "https://github.com/jpsim/Yams.git",
-                            from: "5.3.0"),
+    dependencies: [.package(url: "https://github.com/AnarchoSystems/gherkin.git",
+                            branch: "swift"),
                    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
     ],
     targets: [
@@ -26,15 +25,10 @@ let package = Package(
                ]),
         .target(name: "CucumberSwift",
                 dependencies: [.product(name: "SwiftSyntax", package: "swift-syntax"),
+                               .product(name: "Gherkin", package: "gherkin"),
                                "CukeMacros"]),
-        .executableTarget(name: "RunGenSteps",
-                          dependencies: [.product(name: "Yams", package: "Yams")]),
-        .plugin(name: "GenSteps",
-                capability: .buildTool,
-                dependencies: ["RunGenSteps"]),
         .testTarget(name: "cucumber-swiftTests",
                     dependencies: ["CucumberSwift"],
-                    resources: [.process("Test.feature")],
-                    plugins: ["GenSteps"])
+                    resources: [.process("Test.feature")])
     ]
 )

@@ -4,7 +4,12 @@ import SwiftCompilerPlugin
 
 @main
 struct ContainerStoragePlugin: CompilerPlugin {
-    let providingMacros: [Macro.Type] = [ContainerStorageMacro.self, MatchMacro.self]
+    let providingMacros: [Macro.Type] = [
+        ContainerStorageMacro.self,
+        GivenAttributeMacro.self,
+        WhenAttributeMacro.self,
+        ThenAttributeMacro.self,
+    ]
 }
 
 enum MacroError : LocalizedError {

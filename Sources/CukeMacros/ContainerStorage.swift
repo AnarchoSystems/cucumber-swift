@@ -50,7 +50,7 @@ public struct ContainerStorageMacro: AccessorMacro, PeerMacro {
         return [
             """
             struct \(raw: expData.keyName) : StateKey {
-                typealias Value = \(raw: expData.typeName)
+                public typealias Value = \(raw: expData.typeName)
             }
             """
         ]
@@ -65,10 +65,10 @@ public struct ContainerStorageMacro: AccessorMacro, PeerMacro {
         let expData = try extract(from: declaration)
         
         return [
-                """
-                get { self[\(raw: expData.keyName).self]\(raw: expData.initializerValue.map{"?? " + $0} ?? "") }
-                set { self[\(raw: expData.keyName).self] = newValue }
-                """
+            """
+            get { self[\(raw: expData.keyName).self]\(raw: expData.initializerValue.map { " ?? " + $0 } ?? "") }
+            set { self[\(raw: expData.keyName).self] = newValue }
+            """
         ]
         
     }

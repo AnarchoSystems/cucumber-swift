@@ -1,29 +1,25 @@
 import Foundation
 
+public enum RowColMajor {
+    case rowMajor
+    case columnMajor
+}
+
+public enum StepArgDef {
+    case none
+    case docString
+    case table(RowColMajor, hasHeader: Bool = true)
+    public static var table: StepArgDef { .table(.rowMajor, hasHeader: true) }
+}
+
 @attached(accessor) @attached(peer, names: prefixed(__Key_))
 public macro ContainerStorage() = #externalMacro(module: "CukeMacros", type: "ContainerStorageMacro")
 
-@freestanding(expression)
-public macro Given<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
+@attached(peer, names: named(_pr_reporter), named(reporter), named(regexText), named(match))
+public macro Given<Output>(_ pattern: Regex<Output>, _ stepArg: StepArgDef = .none) = #externalMacro(module: "CukeMacros", type: "GivenAttributeMacro")
 
-@freestanding(expression)
-public macro And<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
+@attached(peer, names: named(_pr_reporter), named(reporter), named(regexText), named(match))
+public macro When<Output>(_ pattern: Regex<Output>, _ stepArg: StepArgDef = .none) = #externalMacro(module: "CukeMacros", type: "WhenAttributeMacro")
 
-@freestanding(expression)
-public macro When<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
-
-@freestanding(expression)
-public macro Then<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
-
-@freestanding(expression)
-public macro But<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
-@freestanding(expression)
-
-// more generic keyword
-public macro Match<First, each T>(_ pattern: Regex<(First, repeat each T)>, closure: @escaping (repeat each T) async throws -> Void) -> ErasedMatcher
-= #externalMacro(module: "CukeMacros", type: "MatchMacro")
+@attached(peer, names: named(_pr_reporter), named(reporter), named(regexText), named(match))
+public macro Then<Output>(_ pattern: Regex<Output>, _ stepArg: StepArgDef = .none) = #externalMacro(module: "CukeMacros", type: "ThenAttributeMacro")
