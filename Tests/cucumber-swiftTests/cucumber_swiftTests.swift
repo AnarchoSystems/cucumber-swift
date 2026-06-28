@@ -230,8 +230,13 @@ struct StepLogger {
     var logs: [String] = []
 }
 
+fileprivate struct HiddenCounter {
+    var value: Int
+}
+
 extension StateContainer {
     @ContainerStorage var stepLogger: StepLogger = StepLogger()
+    @ContainerStorage fileprivate var hiddenCounter: HiddenCounter = HiddenCounter(value: 0)
 }
 
 @Test
@@ -304,4 +309,22 @@ func testNiceRegexTextGeneration() {
 
     #expect(SomeStep().regexText == "^I am a step$")
 
+}
+
+@Test
+func testContainerStorageWithFileprivateType() {
+    let container = StateContainer()
+    #expect(container.hiddenCounter.value == 0)
+    container.hiddenCounter.value = 7
+    #expect(container.hiddenCounter.value == 7)
+}
+
+@Test
+func testStepWithLabeledParameters() {
+    struct LabeledArgumentStep: Step {
+        @When(/^I label (\\d+) as (.*)$/)
+        func onRecognize(quantity amount: Int, kind label: String) {}
+    }
+
+    #expect(LabeledArgumentStep().regexText == #"^I label (\\d+) as (.*)$"#)
 }

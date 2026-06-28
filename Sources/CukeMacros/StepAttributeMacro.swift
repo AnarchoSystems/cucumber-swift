@@ -174,7 +174,16 @@ private struct StepMethodMacro {
             """
         }
 
-        let callArgs = parameters.map { $0.secondName?.text ?? $0.firstName.text }.joined(separator: ", ")
+        let callArgs = parameters.map { param in
+            let externalName = param.firstName.text
+            let localName = param.secondName?.text ?? externalName
+
+            if externalName == "_" {
+                return localName
+            }
+
+            return "\(externalName): \(localName)"
+        }.joined(separator: ", ")
         let callPrefix = "\(isThrowing ? "try " : "")\(isAsync ? "await " : "")"
         let needsMatchBinding = !captureDecodeLines.isEmpty
 

@@ -49,8 +49,8 @@ public struct ContainerStorageMacro: AccessorMacro, PeerMacro {
         
         return [
             """
-            struct \(raw: expData.keyName) : StateKey {
-                public typealias Value = \(raw: expData.typeName)
+            private struct \(raw: expData.keyName) : StateKey {
+                typealias Value = \(raw: expData.typeName)
             }
             """
         ]
