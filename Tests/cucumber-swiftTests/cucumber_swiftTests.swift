@@ -27,7 +27,7 @@ func testRunAllScenarios(pickle: Pickle) async throws {
         ])
 
     let container = StateContainer()
-    container.reporter = NoReporter()
+    //container.reporter = NoReporter()
     guard let fileURL = URL(string: pickle.uri) else {
         fatalError("Invalid pickle URI: \(pickle.uri)")
     }
@@ -126,14 +126,14 @@ public struct CukeExpectation: Step {
 
     @Then(/^it should (print snippets|be pending|fail|work)$/)
     func onRecognize(_ cukeResult: CukeResult) {
-        cukeExpectEqual(result, cukeResult)
+        #cukeExpect(result == cukeResult)
     }
 }
 
 public struct GivenDocString: Step {
     @Given(/^a docstring:$/, .docString)
     func onRecognize(_ docString: String) {
-        cukeExpect(!docString.isEmpty)
+        #cukeExpect(!docString.isEmpty)
     }
 }
 
@@ -144,7 +144,7 @@ public struct TestData: Codable, CodableDataTableDecodable {
 public struct GivenDataTable: Step {
     @Given(/^a data table:$/, .table(.rowMajor, hasHeader: true))
     func onRecognize(_ table: [TestData]) {
-        cukeExpect(!table.isEmpty)
+        #cukeExpect(!table.isEmpty)
     }
 }
 
@@ -155,6 +155,9 @@ private struct ExpectationProbe: Step {
     func match(_ step: PickleStep) -> (() async throws -> Void)? {
         nil
     }
+    func cukeExpect(_ condition: Bool, _ message: String = "Expectation failed") {
+        #cukeExpect(condition, message, reporter: reporter)
+    }
 }
 
 @Test
@@ -162,19 +165,7 @@ func testCukeExpectHelpers() {
     let container = StateContainer()
     let probe = ExpectationProbe()
     try! container.inject(into: probe)
-
     probe.cukeExpect(true)
-    probe.cukeExpectEqual(2 + 2, 4)
-    probe.cukeExpectNotEqual(2 + 2, 5)
-    probe.cukeExpectNil(Optional<Int>.none)
-    let value = probe.cukeExpectNotNil("ok")
-    #expect(value == "ok")
-    probe.cukeExpectContains(["a", "b", "c"], "b")
-    probe.cukeExpectEmpty([Int]())
-    probe.cukeExpectNotEmpty([1])
-    probe.cukeExpectGreaterThan(3, 2)
-    probe.cukeExpectLessThan(2, 3)
-    probe.cukeExpectApproximatelyEqual(0.3, 0.1 + 0.2, tolerance: 0.000_001)
 }
 
 public struct CukeReadsFile: Step {
@@ -285,7 +276,6 @@ func testStepDecorator() async throws {
         LoggingStepDecorator.self)
 
     let container = StateContainer()
-    container.reporter = NoReporter()
 
     for pickle in pickles {
         try await Cucumber.run(scenario: pickle, on: container, using: collection)

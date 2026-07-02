@@ -3,6 +3,38 @@ import Gherkin
 
 // MARK: - Cucumber def
 
+final class ReportWrapper: CukeReporter {
+    var failed = false
+    var message = ""
+    let original: any CukeReporter
+    init(original: any CukeReporter) {
+        self.original = original
+    }
+    func reportRunningScenario(status: ScenarioState) {
+        original.reportRunningScenario(status: status)
+    }
+    func reportAssertionFailure(message: String, file: StaticString, line: UInt) {
+        self.failed = true
+        self.message = message
+        self.original.reportAssertionFailure(message: message, file: file, line: line)
+    }
+    func onStepsUndefined(_ steps: [ScenarioState.Step]) {
+        original.onStepsUndefined(steps)
+    }
+    func reportFinishedScenario(
+        status: ScenarioState, elapsedTime: Duration, timeWithHooks: Duration
+    ) {
+        original.reportFinishedScenario(
+            status: status, elapsedTime: elapsedTime, timeWithHooks: timeWithHooks)
+    }
+}
+
+struct DebugError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+    var localizedDescription: String { message }
+}
+
 public enum Cucumber {
 
     public static func findScenarios(in directory: URL) throws -> [Pickle] {
@@ -43,6 +75,12 @@ public enum Cucumber {
             )
         }
 
+        let reporter = ReportWrapper(original: container.reporter)
+        defer {
+            container.reporter = reporter.original
+        }
+        container.reporter = reporter
+
         var status = ScenarioState(id: scenario.id, name: scenario.name, uri: scenario.uri)
         var stepsToUse: [(Any, () async throws -> Void, PickleStep)] = []
         var missingSteps: [ScenarioState.Step] = []
@@ -64,7 +102,8 @@ public enum Cucumber {
 
             guard let matchedStep = matchingSteps.first else {
                 let location = stepLocations?[pickleStep.astNodeIds.first ?? ""]
-                let undefinedStep = ScenarioState.Step.undefined(pickleStep.text, location: location)
+                let undefinedStep = ScenarioState.Step.undefined(
+                    pickleStep.text, location: location)
                 missingSteps.append(undefinedStep)
                 status.steps.append(undefinedStep)
                 continue
@@ -86,12 +125,31 @@ public enum Cucumber {
             do {
                 try container.inject(into: stepDef)
                 try await runStep()
-                status.steps.append(ScenarioState.Step.success(pickleStep.text, location: stepLocations?[pickleStep.astNodeIds.first ?? ""]))
+                if reporter.failed {
+                    status.steps.append(
+                        ScenarioState.Step.failure(
+                            pickleStep.text,
+                            location: stepLocations?[pickleStep.astNodeIds.first ?? ""],
+                            DebugError(message: reporter.message)))
+                } else {
+                    status.steps.append(
+                        ScenarioState.Step.success(
+                            pickleStep.text,
+                            location: stepLocations?[pickleStep.astNodeIds.first ?? ""]
+                        ))
+                }
             } catch is Pending {
-                status.steps.append(ScenarioState.Step.pending(pickleStep.text, location: stepLocations?[pickleStep.astNodeIds.first ?? ""]))
+                status.steps.append(
+                    ScenarioState.Step.pending(
+                        pickleStep.text, location: stepLocations?[pickleStep.astNodeIds.first ?? ""]
+                    ))
                 return
             } catch {
-                status.steps.append(ScenarioState.Step.failure(pickleStep.text, location: stepLocations?[pickleStep.astNodeIds.first ?? ""], error))
+                status.steps.append(
+                    ScenarioState.Step.failure(
+                        pickleStep.text,
+                        location: stepLocations?[pickleStep.astNodeIds.first ?? ""],
+                        error))
                 throw error
             }
         }

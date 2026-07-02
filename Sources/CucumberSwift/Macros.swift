@@ -23,3 +23,20 @@ public macro When<Output>(_ pattern: Regex<Output>, _ stepArg: StepArgDef = .non
 
 @attached(peer, names: named(_pr_reporter), named(reporter), named(regexText), named(match))
 public macro Then<Output>(_ pattern: Regex<Output>, _ stepArg: StepArgDef = .none) = #externalMacro(module: "CukeMacros", type: "ThenAttributeMacro")
+
+@freestanding(expression)
+public macro cukeExpect(
+    _ condition: Bool,
+    _ message: String = "Expectation failed",
+    file: StaticString = #fileID,
+    line: UInt = #line
+) -> Void = #externalMacro(module: "CukeMacros", type: "CukeExpectMacro")
+
+@freestanding(expression)
+public macro cukeExpect(
+    _ condition: Bool,
+    _ message: String = "Expectation failed",
+    reporter: any CukeReporter,
+    file: StaticString = #fileID,
+    line: UInt = #line
+) -> Void = #externalMacro(module: "CukeMacros", type: "CukeExpectMacro")

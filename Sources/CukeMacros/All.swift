@@ -9,6 +9,7 @@ struct ContainerStoragePlugin: CompilerPlugin {
         GivenAttributeMacro.self,
         WhenAttributeMacro.self,
         ThenAttributeMacro.self,
+        CukeExpectMacro.self,
     ]
 }
 
